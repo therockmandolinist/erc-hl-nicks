@@ -136,50 +136,20 @@
   :group 'erc-hl-nicks
   :type  '(repeat string))
 
+(defcustom erc-hl-nicks-color-list
+  '("#B8BB26" "#FABD2F" "#83A598" "#D3869B"
+    "#8EC07C" "#FE8019" "#3FD7E5" "#79740E"
+    "#B57614" "#076678" "#8F3F71" "#427B58"
+    "#AF3A03" "#00A7AF" "#DD6F48" "#bdae93")
+  "Colors for nicks."
+  :group 'erc-hl-nicks
+  :type '(repeat string))
+
 (defface erc-hl-nicks-nick-base-face
   '((t nil))
   "Base face used for highlighting nicks. (Before the nick
   color is added)"
   :group 'erc-hl-nicks)
-
-(defvar erc-hl-nicks-minimum-luminence 85
-  "The threshold to invert when the background-mode is dark")
-
-(defvar erc-hl-nicks-maximum-luminence 170
-  "The threshold to invert when the background-mode is light")
-
-(defvar erc-hl-nicks-bg-color (cdr (assoc 'background-color (frame-parameters)))
-  "The background color to use when calculating the contrast. This var is
-  exposed so it can be manually set in the case of terminal emacs (which doesn't
-  necessarily know the bg color).")
-
-(defvar erc-hl-nicks-minimum-contrast-ratio 3.5
-  "The amount of contrast desired between the buffer background color
-  and the foreground color chosen by erc-hl-nicks. The higher the
-  number the greater the contrast. A high number on a dark background
-  would make all of the nicks appear in pastel/washed-out colors while
-  on a dark background they may appear close to black. Somewhere
-  between 3.0 and 4.5 seems to be the sweet spot.")
-
-(defvar erc-hl-nicks-color-contrast-strategies
-  '((invert . erc-hl-nicks-invert-for-visibility)
-    (contrast . erc-hl-nicks-fix-color-contrast))
-  "An alist of strategies available and their functions:
-
-  'invert - if the color is too dark/light to be seen based on the
-  bg-mode (dark or light) of the frame, simply invert the color.
-
-  'contrast - attempt to achieve a decent contrast ratio (specified by
-  `erc-hl-nicks-minimum-contrast-ratio') by brightening or darkening
-  the color")
-
-(defvar erc-hl-nicks-color-contrast-strategy 'invert
-  "How should erc-hl-nicks attempt to make the nick colors visible?
-  The options are listed in `erc-hl-nicks-color-contrast-strategies'
-
-  This option can be a list and will be applied in the order defined.
-  That is, '(invert contrast) will invert as needed and then adjust
-  the color as needed.")
 
 (defvar erc-hl-nicks-face-table
   (make-hash-table :test 'equal)
@@ -191,26 +161,6 @@
   (setq erc-hl-nicks-face-table
         (make-hash-table :test 'equal)))
 
-(defun erc-hl-nicks-hexcolor-luminance (color)
-  "Returns the luminance of color COLOR. COLOR is a string \(e.g.
-  \"#ffaa00\", \"blue\"\) `color-values' accepts. Luminance is a
-  value of 0.299 red + 0.587 green + 0.114 blue and is always
-  between 0 and 255."
-  (let* ((values (x-color-values color))
-         (r (car values))
-         (g (car (cdr values)))
-         (b (car (cdr (cdr values)))))
-    (floor (+ (* 0.299 r) (* 0.587 g) (* 0.114 b)) 256)))
-
-(defun erc-hl-nicks-invert-color (color)
-  "Returns the inverted color of COLOR."
-  (let* ((values (x-color-values color))
-         (r (car values))
-         (g (car (cdr values)))
-         (b (car (cdr (cdr values)))))
-    (format "#%04x%04x%04x"
-            (- 65535 r) (- 65535 g) (- 65535 b))))
-
 (defun erc-hl-nicks-trim-irc-nick (nick)
   "Removes instances of erc-hl-nicks-ignore-chars from both sides of NICK"
   (let ((stripped (replace-regexp-in-string
@@ -220,62 +170,12 @@
      (format "^\\([%s]\\)+" erc-hl-nicks-ignore-chars)
      "" stripped)))
 
-(defun erc-hl-nicks-brightness-contrast (c1 c2)
-  "Determines the amount of contrast between C1 and C2"
-  (let* ((l1 (erc-hl-nicks-hexcolor-luminance c1))
-         (l2 (erc-hl-nicks-hexcolor-luminance c2))
-         (d (if (< l1 l2) l1 l2))
-         (b (if (equal d l1) l2 l1)))
-    (/ (+ 0.05 b) (+ 0.05 d))))
-
-(defun erc-hl-nicks-fix-color-contrast (color)
-  "Adjusts COLOR by blending it with white or black, based on
-  background-mode until there is enough contrast between COLOR and
-  the background color. See `erc-hl-nicks-minimum-contrast-ratio' to
-  adjust how far to blend the color."
-  (if (and erc-hl-nicks-minimum-contrast-ratio
-           (< 0 erc-hl-nicks-minimum-contrast-ratio))
-      (some
-       (lambda (c)
-         (let ((hex (color-rgb-to-hex (nth 0 c) (nth 1 c) (nth 2 c))))
-           (when (> (erc-hl-nicks-brightness-contrast erc-hl-nicks-bg-color hex)
-                    erc-hl-nicks-minimum-contrast-ratio)
-             hex)))
-       (let ((bg-mode (cdr (assoc 'background-mode (frame-parameters)))))
-         (color-gradient
-          (color-name-to-rgb color)
-          (color-name-to-rgb
-           (if (equal 'dark bg-mode) "white" "black"))
-          512)))
-    color))
-
-(defun erc-hl-nicks-invert-for-visibility (color)
-  "Inverts the given color based on luminence and background-mode
-  (dark or light)."
-  (let ((bg-mode (cdr (assoc 'background-mode (frame-parameters)))))
-    (cond
-     ((and (equal 'dark bg-mode)
-           (< (erc-hl-nicks-hexcolor-luminance color)
-              erc-hl-nicks-minimum-luminence))
-      (erc-hl-nicks-invert-color color))
-     ((and (equal 'light bg-mode)
-           (> (erc-hl-nicks-hexcolor-luminance color)
-              erc-hl-nicks-maximum-luminence))
-      (erc-hl-nicks-invert-color color))
-     (t color))))
-
 (defun erc-hl-nicks-color-for-nick (nick)
   "Get the color to use for the given nick by calculating the color
   and applying the contrast strategies to it."
-  (let ((color (concat "#" (substring (md5 (downcase nick)) 0 12))))
-    (reduce
-     (lambda (color strategy)
-       (let ((fn (cdr (assq strategy erc-hl-nicks-color-contrast-strategies))))
-         (if fn
-             (funcall fn color)
-           color)))
-     (erc-hl-nicks-ensure-list erc-hl-nicks-color-contrast-strategy)
-     :initial-value color)))
+  (nth (mod (string-to-number (substring (md5 nick) 0 6) 16)
+            (length erc-hl-nicks-color-list))
+       erc-hl-nicks-color-list))
 
 (defun erc-hl-nicks-face-name (nick)
   (make-symbol (concat "erc-hl-nicks-nick-" nick "-face")))
